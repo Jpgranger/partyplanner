@@ -44,6 +44,84 @@ async function getGuestsAndRsvps() {
   }
 }
 
+async function createEvent(eventData) {
+  try {
+    const res = await fetch(API, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(eventData),
+    });
+    if (!res.ok) throw new Error("Failed to create event");
+    const json = await res.json();
+    await getEvents();
+    selectedEvent = json.data;
+    render();
+  } catch (err) {
+    console.error("Error creating event:", err);
+    alert("There was a problem creating the event. Please check the fields and try again.");
+  }
+}
+
+async function deleteEvent(id) {
+  if (!confirm("Are you sure you want to delete this event?")) return;
+  try {
+    const res = await fetch(`${API}/${id}` , { method: "DELETE" });
+    if (!res.ok) throw new Error("Failed to delete event");
+    selectedEvent = null;
+    await getEvents();
+  } catch (err) {
+    console.error("Error deleting event:", err);
+    alert("There was a problem deleting the event. Please try again.");
+  }
+}
+
+function EventForm() {
+  const $form = document.createElement("form");
+  $form.classList.add("event-form");
+
+  $form.innerHTML = `
+    <label>
+      Name
+      <input type="text" name="name" required />
+    </label>
+    <label>
+      Description
+      <textarea name="description" required></textarea>
+    </label>
+    <label>
+      Location
+      <input type="text" name="location" required />
+    </label>
+    <label>
+      Date
+      <input type="date" name="date" required />
+    </label>
+    <button type="submit">Create Event</button>
+  `;
+
+  $form.addEventListener("submit", (evt) => {
+    evt.preventDefault();
+    const formData = new FormData($form);
+    const name = formData.get("name").trim();
+    const description = formData.get("description").trim();
+    const location = formData.get("location").trim();
+    const dateInput = formData.get("date");
+
+    if (!name || !description || !location || !dateInput) {
+      alert("Please fill in all fields.");
+      return;
+    }
+
+    const isoDate = new Date(dateInput).toISOString();
+    createEvent({ name, description, location, date: isoDate });
+    $form.reset();
+  });
+
+  return $form;
+}
+
 function EventListItem(event) {
   const $li = document.createElement("li");
   const $a = document.createElement("a");
@@ -87,7 +165,6 @@ function EventDetails() {
   $h3.textContent = `${name} #${id}`;
 
   const $dl = document.createElement("dl");
-
   $dl.append(...dtdd("Date", new Date(date).toLocaleString()));
   $dl.append(...dtdd("Location", location));
   $dl.append(...dtdd("Description", description));
@@ -97,13 +174,20 @@ function EventDetails() {
   const guestList = GuestList();
   if (guestList) $section.appendChild(guestList);
 
+ 
+  const $deleteBtn = document.createElement("button");
+  $deleteBtn.textContent = "Delete Event";
+  $deleteBtn.classList.add("delete-btn");
+  $deleteBtn.addEventListener("click", () => deleteEvent(id));
+  $section.appendChild($deleteBtn);
+
   return $section;
 }
 
 function GuestList() {
   if (!selectedEvent || guests.length === 0 || rsvps.length === 0) return null;
-  const matchingRsvps = rsvps.filter(r => r.eventId === selectedEvent.id);
-  const attending = guests.filter(g => matchingRsvps.map(r => r.guestId).includes(g.id));
+  const matchingRsvps = rsvps.filter((r) => r.eventId === selectedEvent.id);
+  const attending = guests.filter((g) => matchingRsvps.map((r) => r.guestId).includes(g.id));
 
   const $div = document.createElement("div");
   $div.classList.add("guest-list");
@@ -113,7 +197,7 @@ function GuestList() {
   $div.appendChild($h4);
 
   const $ul = document.createElement("ul");
-  attending.forEach(g => {
+  attending.forEach((g) => {
     const $li = document.createElement("li");
     $li.textContent = g.name;
     $ul.appendChild($li);
@@ -135,8 +219,12 @@ function render() {
   const $app = document.querySelector("#app");
 
   $app.innerHTML = `
-    <h1>Event Planner</h1>
+    <h1>Event Planner Admin</h1>
     <main>
+      <section id="create">
+        <h2>Create a New Event</h2>
+        <EventForm></EventForm>
+      </section>
       <section>
         <h2>Upcoming Events</h2>
         <EventList></EventList>
@@ -147,7 +235,7 @@ function render() {
       </section>
     </main>
   `;
-
+  $app.querySelector("EventForm").replaceWith(EventForm());
   $app.querySelector("EventList").replaceWith(EventList());
   $app.querySelector("EventDetails").replaceWith(EventDetails());
 }
